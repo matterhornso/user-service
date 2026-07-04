@@ -1,0 +1,49 @@
+{
+  "swagger": {
+    "securityDefinitions": {
+      "jwt": {
+        "type": "apiKey",
+        "name": "Authorization",
+        "in": "header"
+      }
+    }
+  },
+  "basePath": "/user/api/v1",
+  "entryFile": "./src/infrastructure/server.ts",
+  "specVersion": 3,
+  "outputDirectory": "./api/dist",
+  "controllerPathGlobs": ["src/interfaces/controllers/**/*Controller.ts"],
+  "specMerging": "recursive",
+  "spec": {
+      "servers": [
+        {
+          "url": "http://localhost:3000/api/v1"
+        },
+        {
+          "url": "https://nse-dev-api.shinetrace.space/user/api/v1"
+        },
+        {
+          "url": "https://shine-dev-api-1.shinetrace.space/user/api/v1"
+        },
+        {
+          "url": "https://shine-staging-api-1.shinetrace.space/user/api/v1"
+        },
+        {
+          "url": "https://shine-prod-api-1.shinetrace.space/user/api/v1"
+        }
+      ],
+      "host":"http://localhost:3000/api/v1",
+      "schemes": [
+        "http"
+      ],
+      "specVersion": 3,
+      "outputDirectory": "./api/dist"
+  },
+  "routes": {
+    "authenticationModule": "./src/application/security/authentication.ts",
+    "basePath": "/api/v1",
+    "entryFile": "./src/infrastructure/server.ts",
+    "middleware": "express",
+    "routesDir": "./src/infrastructure/routes"
+  }
+}

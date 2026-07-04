@@ -1,0 +1,5 @@
+{
+  "exec": "ENVIRONMENT=../../env/dev ts-node src/infrastructure/server.ts",
+  "watch": ["src"],
+  "ext": "ts"
+}

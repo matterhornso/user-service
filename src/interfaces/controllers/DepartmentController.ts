@@ -595,7 +595,9 @@ export class DepartmentController extends Controller {
    *  @param id
    */
 
-  @Security("jwt")
+  // No @Security("jwt") — this is called mid-login by auth-service's
+  // LoginController (before any JWT exists) to resolve the org type for the
+  // OTP response. Gating it on jwt makes /auth/login unconditionally fail.
   @Get("getOrgByDepartmentId")
   async getOrgByDepartmentId(@Query() id: string, @Request() request: any) {
     try {

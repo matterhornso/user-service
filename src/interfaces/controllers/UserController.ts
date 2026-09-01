@@ -317,7 +317,22 @@ export class UserController extends Controller {
     try {
       const user = new GetUser(this.userRepository);
       let result = await user.getUserByEmailPassword(email, password);
-      return new Response().sendResponseSuccess(result, true);
+      // Project to a safe field whitelist before returning over HTTP. This
+      // endpoint previously returned the full user record — including
+      // password/passwordHash/passwordSalt/shineKey/shinePrivateKey — by email
+      // alone, a P0 credential-disclosure leak (see SECURITY-FINDINGS.md).
+      // Internal forgot/reset flows use the GetUser use-case directly (not this
+      // HTTP route), so they still get the full record; only the wire response
+      // is trimmed. The sole HTTP consumer (auth-service login) needs just
+      // uuid + departmentId.
+      const safe = (u: any) => {
+        if (!u) return u;
+        const o = typeof u.toObject === 'function' ? u.toObject() : u;
+        const { _id, uuid, email, fullName, departmentId, creator, dateOfEntry, lastUpdated } = o;
+        return { _id, uuid, email, fullName, departmentId, creator, dateOfEntry, lastUpdated };
+      };
+      const projected = Array.isArray(result) ? result.map(safe) : safe(result);
+      return new Response().sendResponseSuccess(projected, true);
     } catch (error: any) {
       return new Response().sendResponseSuccess(error.message, false)
     }
@@ -477,6 +492,16 @@ export class UserController extends Controller {
       if (verify_res.success) {
         let token_res = await new AuthService().verifyToken(user.token)
         if (!token_res.data) throw new Error('jwt token not found or expire ');
+        // Enforce that this is a reset-purpose token AND that it was issued for
+        // the exact account being reset. Without this, any valid reset token
+        // (or a normal login token) could reset an arbitrary account by
+        // supplying a different email in the request body. The token's `uuid`
+        // is bound to the requesting email at generation (see auth-service
+        // generateJwtToken).
+        if (token_res.data.type !== 'reset' || token_res.data.uuid !== user.email) {
+          this.setStatus(403);
+          return new Response().sendResponseFailure("reset token is not valid for this account", false);
+        }
         const getUser = new GetUser(this.userRepository);
         let user_res = await getUser.getUserByEmailPassword(user.email, '')
         const changePasswordUseCase = new ChangeUserPassword(this.userRepository)

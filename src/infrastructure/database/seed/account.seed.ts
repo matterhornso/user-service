@@ -35,8 +35,7 @@ export async function seedAccount(): Promise<void> {
   const departments = db.collection('departments');
   const users = db.collection('users');
 
-  const existing = await users.findOne({ email: EMAIL });
-  if (existing) { console.log('[account seed] user already exists - skipping.'); return; }
+  const existing: any = await users.findOne({ email: EMAIL });
 
   let org: any = await organizations.findOne({ name: ORG_NAME });
   if (!org) {
@@ -59,9 +58,27 @@ export async function seedAccount(): Promise<void> {
     console.log('[account seed] created department');
   }
 
-  // Must match validPassword() exactly or login fails with "password incorrect".
+  // The browser MD5-hashes the password before it is ever sent
+  // (LoginPage.tsx), so what the server stores is pbkdf2 over that digest, not
+  // over the plaintext. Storing pbkdf2(plaintext) produces an account whose
+  // credentials verify correctly against the API when tested directly and fail
+  // every actual login — which is exactly what happened the first time.
+  const transmitted = crypto.createHash('md5').update(PASSWORD).digest('hex');
   const passwordSalt = crypto.randomBytes(16).toString('hex');
-  const passwordHash = crypto.pbkdf2Sync(PASSWORD, passwordSalt, 1000, 64, 'sha512').toString('hex');
+  const passwordHash = crypto.pbkdf2Sync(transmitted, passwordSalt, 1000, 64, 'sha512').toString('hex');
+
+  if (existing) {
+    // Repair rather than skip: an account seeded before the MD5 step was
+    // understood has a hash the login path can never match.
+    const stored = crypto.pbkdf2Sync(transmitted, existing.passwordSalt || '', 1000, 64, 'sha512').toString('hex');
+    if (stored === existing.passwordHash) {
+      console.log('[account seed] user already exists and its password matches - skipping.');
+      return;
+    }
+    await users.updateOne({ _id: existing._id }, { $set: { passwordHash, passwordSalt, updatedAt: new Date() } });
+    console.log('[account seed] user existed with a non-matching hash - password reset to the configured value.');
+    return;
+  }
 
   await users.insertOne({
     uuid: uuidv4(), fullName: FULL_NAME, email: EMAIL, departmentId: dept._id,
